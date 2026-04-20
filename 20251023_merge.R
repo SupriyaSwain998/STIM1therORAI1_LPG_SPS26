@@ -1,5 +1,5 @@
 getwd ()
-setwd ("/shared/mendel/teams/laporte/supriya/Trancriptomics/01_Analysis/")
+setwd ("~/Trancriptomics/01_Analysis/")
 ext <- "-extractedReadCounts.tab"
 files <- list.files(path = "04_Merged/", pattern = ext)
 
