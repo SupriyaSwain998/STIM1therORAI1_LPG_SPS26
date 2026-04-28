@@ -1,4 +1,4 @@
-#hierarchial clustering
+﻿#hierarchial clustering
 # =========================
 # 1. Load libraries
 # =========================
@@ -64,7 +64,7 @@ dist_counts <- dist(t(stabilized_counts))
 annotation_col <- data.frame(condition = coldata$condition)
 rownames(annotation_col) <- rownames(coldata)
 png(
-  filename = "20260130_hierarchial_clustering.png",
+  filename = "260428_output/20260130_hierarchial_clustering.png",
   width = 10,
   height = 10,
   units = "in",
@@ -122,7 +122,7 @@ for (pcs in pc_pairs) {
   
   # Save each PCA plot
   ggsave(
-    filename = paste0("20260130_PCA_PC", x_pc, "_PC", y_pc, ".png"),
+    filename = paste0("260428_output/20260130_PCA_PC", x_pc, "_PC", y_pc, ".png"),
     plot = p,
     width = 8,
     height = 5,
@@ -236,7 +236,7 @@ rescue_table_e$GeneSymbol <- mapIds(org.Mm.eg.db,
                                     multiVals = "first")
 write.csv(
   rescue_table_e,
-  "20260213_KIe_sh_try_rescue_table.csv",
+  "260428_output/20260213_KIe_sh_try_rescue_table.csv",
   row.names = FALSE
 )
 
@@ -293,7 +293,7 @@ rescue_table_n$GeneSymbol <- mapIds(org.Mm.eg.db,
                                     multiVals = "first")
 write.csv(
   rescue_table_n,
-  "20260213_KIn_MOE_try_rescue_table.csv",
+  "260428_output/20260213_KIn_MOE_try_rescue_table.csv",
   row.names = FALSE
 )
 
@@ -317,7 +317,7 @@ cat("KIn–MOE:", median(rescue_table_n$rescue_metric), "\n")
 # ============================
 
 png(
-  "20260212_another_way_KI_sh_rescue_metric_distribution.png",
+  "260428_output/20260212_another_way_KI_sh_rescue_metric_distribution.png",
   width = 1200,
   height = 900,
   res = 150
@@ -335,7 +335,7 @@ abline(v = 0, col = "red", lwd = 2)
 dev.off()
 
 png(
-  "20260212_another_way_KIn_MOE_rescue_metric_distribution.png",
+  "260428_output/20260212_another_way_KIn_MOE_rescue_metric_distribution.png",
   width = 1200,
   height = 900,
   res = 150
@@ -409,7 +409,7 @@ plot <- ggplot(combined_rescue, aes(x = Treatment, y = percent, fill = rescue_st
 # Show plot
 print(plot)
 # Save
-ggsave("20260212_another_try_stack_plot_MOE_sh_rescue_pattern.png", 
+ggsave("260428_output/20260212_another_try_stack_plot_MOE_sh_rescue_pattern.png", 
        plot = plot, width = 7, height = 5, dpi = 300)
 
 #Venn diagram
@@ -495,7 +495,7 @@ grid.draw(venn.plot)
 # ===============================
 # Save as PNG
 # ===============================
-png("20260212_try_rescue_overlap_venn.png", width = 1000, height = 1000, res = 150)
+png("260428_output/20260212_try_rescue_overlap_venn.png", width = 1000, height = 1000, res = 150)
 grid::grid.draw(venn.plot)
 dev.off()
 
@@ -506,7 +506,7 @@ intersection_genes <- intersect(
 )
 
 write.csv(intersection_genes,
-          file = "20260213_intersection_rescued_genes_venn.csv",
+          file = "260428_output/20260213_intersection_rescued_genes_venn.csv",
           row.names = FALSE)
 
 
@@ -605,8 +605,8 @@ print (volc_treated_labeled)
 # Save plots
 # ============================
 
-ggsave("20260202_volcano_disease_labeled.png", plot = volc_disease_labeled, width = 7, height = 6, dpi = 300)
-ggsave("20260202_volcano_treated_labeled.png", plot = volc_treated_labeled, width = 7, height = 6, dpi = 300)
+ggsave("260428_output/20260202_volcano_disease_labeled.png", plot = volc_disease_labeled, width = 7, height = 6, dpi = 300)
+ggsave("260428_output/20260202_volcano_treated_labeled.png", plot = volc_treated_labeled, width = 7, height = 6, dpi = 300)
 
 res_disease_e$significance <- ifelse(
   res_disease_e$padj < 0.05,
@@ -619,8 +619,8 @@ res_treated_e$significance <- ifelse(
   "non-significant"
 )
 head (res_treated_e)
-write.csv(res_disease_e, file = "20260202_DEGs_disease_KIe_WTe.csv", sep = "\t")
-write.csv(res_treated_e, file = "20260202_DEGs_treated_sh_KIe.csv", sep = "\t")
+write.csv(res_disease_e, file = "260428_output/20260202_DEGs_disease_KIe_WTe.csv", sep = "\t")
+write.csv(res_treated_e, file = "260428_output/20260202_DEGs_treated_sh_KIe.csv", sep = "\t")
 
 
 #KIn -MOE
@@ -714,8 +714,8 @@ head (res_treated_n)
 # Save plots
 # ============================
 
-ggsave("20260202_volcano_disease_labeled_KIn_WTn.png", plot = volc_disease_labeled_n, width = 7, height = 6, dpi = 300)
-ggsave("20260202_volcano_treated_labeled_MOE_KIn.png", plot = volc_treated_labeled_n, width = 7, height = 6, dpi = 300)
+ggsave("260428_output/20260202_volcano_disease_labeled_KIn_WTn.png", plot = volc_disease_labeled_n, width = 7, height = 6, dpi = 300)
+ggsave("260428_output/20260202_volcano_treated_labeled_MOE_KIn.png", plot = volc_treated_labeled_n, width = 7, height = 6, dpi = 300)
 
 res_disease_n$significance <- ifelse(
   res_disease_n$padj < 0.05,
@@ -728,8 +728,8 @@ res_treated_n$significance <- ifelse(
   "non-significant"
 )
 
-write.csv(res_disease_n, file = "20260202_DEGs_disease_KIn_WTn.csv", sep = "\t")
-write.csv(res_treated_n, file = "20260202_DEGs_treated_MOE_KIn.csv", sep = "\t")
+write.csv(res_disease_n, file = "260428_output/20260202_DEGs_disease_KIn_WTn.csv", sep = "\t")
+write.csv(res_treated_n, file = "260428_output/20260202_DEGs_treated_MOE_KIn.csv", sep = "\t")
 
 
 # ------------------------------
@@ -938,7 +938,7 @@ plots <- lapply(gene_names, plot_gene)
 
 for (i in seq_along(gene_names)) {
   ggsave(
-    filename = paste0("", gene_names[i], "_20260202_plot.png"),
+    filename = paste0("", gene_names[i], "260428_output/_20260202_plot.png"),
     plot = plots[[i]],
     width = 6,
     height = 5,
@@ -988,15 +988,15 @@ p1 = barplot(ego_rescued_sh, showCategory = 35, title = "Enriched GO-BP terms by
 p2 = barplot(ego_rescued_MOE, showCategory = 35, title = "Enriched GO-BP terms by MOE treatment", font.size = 7)
 p3 = barplot(ego_rescued_MOE, showCategory = 35, title = "Enriched GO-BP terms by MOE treatment_0.5", font.size = 7)
 p4= barplot(ego_disease_sh, showCategory = 35, title = "Enriched GO-BP terms by sh disease", font.size = 7)
-write.csv (ego_rescued_sh, file = "20260213_try_sh_rescued_0.05_GO_BP.csv")
-write.csv (ego_rescued_MOE, file = "20260213_try_MOE_rescued_0.o5_GO_BP.csv")
+write.csv (ego_rescued_sh, file = "260428_output/20260213_try_sh_rescued_0.05_GO_BP.csv")
+write.csv (ego_rescued_MOE, file = "260428_output/20260213_try_MOE_rescued_0.o5_GO_BP.csv")
 print (p1)
 print (p2)
 print (p4)
 write.csv (ego_disease_sh, file = "20260323_sh_disease_GO_BP.csv")
-ggsave (filename = "20260213_try_sh_rescued_0.05_GO_BP.png", plot = p1, width = 15, height = 10, dpi = 300)
-ggsave (filename = "20260202_try_MOE_rescued_0.05_GO_BP.png", plot = p2, width = 15, height = 10, dpi = 300)
-ggsave (filename = "20260202_MOE_rescued_0.5_GO_BP.png", plot = p3, width = 15, height = 10, dpi = 300)
+ggsave (filename = "260428_output/20260213_try_sh_rescued_0.05_GO_BP.png", plot = p1, width = 15, height = 10, dpi = 300)
+ggsave (filename = "260428_output/20260202_try_MOE_rescued_0.05_GO_BP.png", plot = p2, width = 15, height = 10, dpi = 300)
+ggsave (filename = "260428_output/20260202_MOE_rescued_0.5_GO_BP.png", plot = p3, width = 15, height = 10, dpi = 300)
 
 
 run_GO_all_ont <- function(entrez_ids, label) {
@@ -1076,11 +1076,11 @@ p_MOE_combined <- plot_GO_combined(go_MOE_df,
 
 p_sh_combined
 p_MOE_combined
-ggsave("20260213_GO_sh_combined.png", p_sh_combined, width = 12, height = 10, dpi = 300)
-ggsave("20260213_GO_MOE_combined.png", p_MOE_combined, width = 12, height = 10, dpi = 300)
+ggsave("260428_output/20260213_GO_sh_combined.png", p_sh_combined, width = 12, height = 10, dpi = 300)
+ggsave("260428_output/20260213_GO_MOE_combined.png", p_MOE_combined, width = 12, height = 10, dpi = 300)
 
-write.csv(as.data.frame(go_sh_df), "20260213_GO_sh_combined.csv", row.names = FALSE)
-write.csv(as.data.frame(go_MOE_df), "20260213_GO_MOE_combined.csv", row.names = FALSE)
+write.csv(as.data.frame(go_sh_df), "260428_output/20260213_GO_sh_combined.csv", row.names = FALSE)
+write.csv(as.data.frame(go_MOE_df), "260428_output/20260213_GO_MOE_combined.csv", row.names = FALSE)
 
 
 #Reactome analysis
@@ -1119,8 +1119,8 @@ p_react_MOE <- barplot(reactome_MOE,
                        title = "Reactome Pathways - MOE treatment",
                        font.size = 8)
 print (p_react_MOE)
-ggsave("20260213_reactome_sh.png", plot = p_react_sh, width = 7, height = 6, dpi = 300)
-ggsave("20260213_reactome_MOE.png", plot = p_react_MOE, width = 7, height = 6, dpi = 300)
+ggsave("260428_output/20260213_reactome_sh.png", plot = p_react_sh, width = 7, height = 6, dpi = 300)
+ggsave("260428_output/20260213_reactome_MOE.png", plot = p_react_MOE, width = 7, height = 6, dpi = 300)
 
 #GSEA 
 #didnt work
@@ -1225,7 +1225,7 @@ upset_list <- list(
   "MOE_Not_rescued"  = moe_not
 )
 library(UpSetR)
-png (filename = "20260213_Upsetplot_sh_MOE_rescue_status.png", width = 3000, height = 2000, res = 300)
+png (filename = "260428_output/20260213_Upsetplot_sh_MOE_rescue_status.png", width = 3000, height = 2000, res = 300)
 
 upset(
   fromList(upset_list),
@@ -1241,7 +1241,7 @@ upset_matrix <- fromList(upset_list)
 
 write.csv(
   upset_matrix,
-  file = "UpSet_binary_matrix_sh_vs_MOE.csv"
+  file = "260428_output/UpSet_binary_matrix_sh_vs_MOE.csv"
 )
 
 
@@ -1361,7 +1361,7 @@ ht <- Heatmap(
 )
 ht
 
-png("260323_heatmap_GOI.png",
+png("260428_output/260323_heatmap_GOI.png",
     width = 3000, height = 1800, res = 300)
 
 draw(ht)
@@ -1562,11 +1562,11 @@ ht2
 ### DRAW SEPARATELY
 ### -----------------------------
 
-png("heatmap_group1.png", width = 2000, height = 1800, res = 300)
+png("260428_output/heatmap_group1.png", width = 2000, height = 1800, res = 300)
 draw(ht1)
 dev.off()
 
-png("heatmap_group2.png", width = 2000, height = 1800, res = 300)
+png("260428_output/heatmap_group2.png", width = 2000, height = 1800, res = 300)
 draw(ht2)
 dev.off()
 
@@ -1761,10 +1761,10 @@ ht2
 ### DRAW SEPARATELY
 ### -----------------------------
 
-png("heatmap_sh_up_down.png", width = 2000, height = 1800, res = 300)
+png("260428_output/heatmap_sh_up_down.png", width = 2000, height = 1800, res = 300)
 draw(ht1)
 dev.off()
 
-png("heatmap_MOE_up_down.png", width = 2000, height = 1800, res = 300)
+png("260428_output/heatmap_MOE_up_down.png", width = 2000, height = 1800, res = 300)
 draw(ht2)
 dev.off()
