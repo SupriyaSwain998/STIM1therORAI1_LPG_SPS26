@@ -1,0 +1,45 @@
+﻿Ensembl,Gene,SubPathway,Pathway
+ENSMUSG00000019943,Atp2b1,Ca2+ extrusion,Ca2+ handling
+ENSMUSG00000054640,Slc8a1,Ca2+ extrusion,Ca2+ handling
+ENSMUSG00000030730,Atp2a1,Sr refilling,Ca2+ handling
+ENSMUSG00000029467,Atp2a2,Sr refilling,Ca2+ handling
+ENSMUSG00000042045,Sln,Sr refilling,Ca2+ handling
+ENSMUSG00000007122,Casq1,Sr refilling,Ca2+ handling
+ENSMUSG00000027861,Casq2,Sr refilling,Ca2+ handling
+ENSMUSG00000015605,Srf,Sr refilling,Ca2+ handling
+ENSMUSG00000026407,Cacna1s,EC coupling,Ca2+ handling
+ENSMUSG00000030592,Ryr1,EC coupling,Ca2+ handling
+ENSMUSG00000040287,Stac3,EC coupling,Ca2+ handling
+ENSMUSG00000017817,Jph2,EC coupling,Ca2+ handling
+ENSMUSG00000017300,Tnnc2,Ca2+ signalling,Ca2+ handling
+ENSMUSG00000009647,Mcu,Ca2+ signalling,Ca2+ handling
+ENSMUSG00000038583,Pln,Ca2+ signalling,Ca2+ handling
+ENSMUSG00000027470,Mylk2,Ca2+ signalling,Ca2+ handling
+ENSMUSG00000038239,Hrc,Ca2+ signalling,Ca2+ handling
+ENSMUSG00000030987,Stim1,Ca2+ signalling,Ca2+ handling
+ENSMUSG00000019787,Trdn,Ca2+ signalling,Ca2+ handling
+ENSMUSG00000091898,Tnnc1,Ca2+ signalling,Ca2+ handling
+ENSMUSG00000049686,Orai1,Ca2+ signalling,Ca2+ handling
+ENSMUSG00000029167,Ppargc1a,Biogenesis,Mitochondria
+ENSMUSG00000020063,Sirt1,Biogenesis,Mitochondria
+ENSMUSG00000058440,Nrf1,Biogenesis,Mitochondria
+ENSMUSG00000003923,Tfam,Biogenesis,Mitochondria
+ENSMUSG00000017686,Rhot1,Migration,Mitochondria
+ENSMUSG00000032536,Trak1,Migration,Mitochondria
+ENSMUSG00000022789,Dnm1l,Fission/Fusion,Mitochondria
+ENSMUSG00000019054,Fis1,Fission/Fusion,Mitochondria
+ENSMUSG00000038084,Opa1,Fission/Fusion,Mitochondria
+ENSMUSG00000029020,Mfn2,Fission/Fusion,Mitochondria
+ENSMUSG00000026864,Hspa5,UPR,Cell stress
+ENSMUSG00000020048,Hsp90b1,UPR,Cell stress
+ENSMUSG00000040435,Ppp1r15a,UPR,Cell stress
+ENSMUSG00000037225,Fgf2,UPR,Cell stress
+ENSMUSG00000020484,Xbp1,UPR,Cell stress
+ENSMUSG00000116429,Ddit3,UPR,Cell stress
+ENSMUSG00000032715,Trib3,UPR,Cell stress
+ENSMUSG00000057329,Bcl2,Apoptosis,Cell stress
+ENSMUSG00000002083,Bbc3,Apoptosis,Cell stress
+ENSMUSG00000024521,Pmaip1,Apoptosis,Cell stress
+ENSMUSG00000027381,Bcl2l11,Apoptosis,Cell stress
+ENSMUSG00000020908,Myh3,Regeneration,Cell stress
+ENSMUSG00000055775,Myh8,Regeneration,Cell stress
