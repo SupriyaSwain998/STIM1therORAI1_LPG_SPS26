@@ -3,8 +3,6 @@
 #SBATCH -c 10                            # Number of cores to use
 #SBATCH --mem=40G                        # Memory allocation
 #SBATCH --job-name=STAR_alignment_PE     # Job name
-#SBATCH --mail-user=swains@igbmc.fr      # Email notifications
-#SBATCH --mail-type=ALL                  # Receive email on all job events
 #SBATCH --array=0-23                     # Array job for 24 samples
 #SBATCH -o alignment_output_%A_%a.log    # Standard output log
 #SBATCH -e alignment_error_%A_%a.log     # Standard error log
