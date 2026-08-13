@@ -2532,3 +2532,13 @@ calcium_pathway_panel <- build_pathway_annotated_heatmap(
   heatmap_title     = "Calcium signaling gene panel",
   out_filename      = "calcium_signaling_pathway_heatmap"
 )
+dir.create("workspace_backups", showWarnings = FALSE)
+
+save.image(
+  file = file.path(
+    "workspace_backups",
+    paste0(Sys.Date(), "_calcium_analysis_workspace.RData")
+  )
+)
+
+message("Workspace saved successfully!")
