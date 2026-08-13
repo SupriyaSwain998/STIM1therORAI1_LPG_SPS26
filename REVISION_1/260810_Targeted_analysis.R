@@ -797,4 +797,1738 @@ if (!is.null(results_mtorc$rescue_heatmap)) {
   )
 }
 
+# ============================================================
+# ---- 8. Pathway-level GSEA: is each gene set coordinately
+#          perturbed in disease, and does that signature resolve
+#          after treatment?
+# ============================================================
+# Three contrasts per arm, all against the SAME gene set (no top_n
+# filtering — this uses the entire ranked transcriptome, which is what
+# GSEA is designed for):
+#   1. Disease (KO vs WT)      — is the pathway perturbed as a set?
+#   2. Treatment vs KO         — does treatment push the pathway in the
+#                                 REVERSE direction of the disease effect?
+#   3. Treatment vs WT         — after treatment, does the pathway look
+#                                 statistically like WT again? (the actual
+#                                 "cured" test — NES near 0 and non-sig
+#                                 here is the strongest rescue evidence)
+#
+# Interpretation:
+#   - Disease step: large |NES|, padj < 0.05  -> pathway is dysregulated
+#   - Treatment vs WT step: NES shrinks toward 0 and/or padj > 0.05
+#     compared to the Disease step -> pathway signature resolving
+#   - Treatment vs WT step: NES stays large/significant, same sign as
+#     Disease -> pathway NOT rescued
+#   - Treatment vs WT step: NES large/significant, OPPOSITE sign ->
+#     over-corrected at the pathway level
 
+if (!requireNamespace("fgsea", quietly = TRUE)) {
+  if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+  BiocManager::install("fgsea")
+}
+library(fgsea)
+
+# Treatment vs WT — direct DESeq2 contrasts (not the log2FC-summing
+# approximation used in the per-gene rescue table). run_deseq() was
+# saved in your workspace RData, so this works without rebuilding dds.
+res_treated_vs_WT_e <- run_deseq(dds, "WT_empty", c("condition", "Stim1R304W/+_sh190", "WT_empty"))
+res_treated_vs_WT_n <- run_deseq(dds, "WT_Nacl",  c("condition", "Stim1R304W/+_MOE",    "WT_Nacl"))
+
+run_pathway_gsea <- function(geneset_list, contrasts, out_dir,
+                             minSize = 5, maxSize = 500) {
+  
+  dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+  
+  # Convert each gene set (Symbols) to Ensembl once, reusing the same
+  # case-robust mapper used everywhere else in this script
+  pathways_ensembl <- lapply(geneset_list, function(symbols) {
+    get_geneset_ensembl(symbols)$Ensembl
+  })
+  
+  all_results <- list()
+  
+  for (contrast_name in names(contrasts)) {
+    res <- contrasts[[contrast_name]]
+    ranks <- res$log2FoldChange
+    names(ranks) <- rownames(res)
+    ranks <- ranks[!is.na(ranks) & is.finite(ranks)]
+    ranks <- ranks[!duplicated(names(ranks))]
+    ranks <- sort(ranks, decreasing = TRUE)
+    
+    fgsea_res <- fgsea::fgsea(pathways = pathways_ensembl, stats = ranks,
+                              minSize = minSize, maxSize = maxSize, eps = 0)
+    fgsea_res$Contrast <- contrast_name
+    all_results[[contrast_name]] <- as.data.frame(
+      fgsea_res[, c("pathway", "NES", "pval", "padj", "size", "Contrast")]
+    )
+  }
+  
+  combined <- bind_rows(all_results)
+  write.csv(combined, file.path(out_dir, paste0(Sys.Date(), "_pathway_GSEA_results.csv")),
+            row.names = FALSE)
+  combined
+}
+
+# "Arm|Step" naming so both arms share identical step labels for faceting
+gsea_contrasts <- list(
+  "sh190 arm|Disease (KO vs WT)" = res_disease_e,
+  "sh190 arm|Treatment vs KO"    = res_treated_e,
+  "sh190 arm|Treatment vs WT"    = res_treated_vs_WT_e,
+  "MOE arm|Disease (KO vs WT)"   = res_disease_n,
+  "MOE arm|Treatment vs KO"      = res_treated_n,
+  "MOE arm|Treatment vs WT"      = res_treated_vs_WT_n
+)
+# ============================================================
+# Rebuild gene sets with mTOR symbols standardized to mouse case
+# ============================================================
+
+calcium_genes_raw <- read_excel(calcium_xlsx)
+calcium_genes <- unique(trimws(as.character(calcium_genes_raw[[1]])))
+calcium_genes <- calcium_genes[
+  !is.na(calcium_genes) & calcium_genes != ""
+]
+
+muscle_genes_raw <- read_excel(muscle_xlsx)
+muscle_genes <- unique(trimws(as.character(muscle_genes_raw[[1]])))
+muscle_genes <- muscle_genes[
+  !is.na(muscle_genes) & muscle_genes != ""
+]
+
+mtorc_genes_raw <- read_excel(mtorc_xlsx)
+mtorc_genes <- unique(trimws(as.character(mtorc_genes_raw[[1]])))
+mtorc_genes <- mtorc_genes[
+  !is.na(mtorc_genes) & mtorc_genes != ""
+]
+
+# ------------------------------------------------------------
+# Convert ALL-CAPS gene symbols to mouse-style symbols
+#
+# CAV3  -> Cav3
+# CLTA  -> Clta
+# MTOR  -> Mtor
+# AKT1  -> Akt1
+#
+# Mixed-case symbols are left unchanged.
+# ------------------------------------------------------------
+
+to_mouse_case_explicit <- function(x) {
+  
+  is_all_caps <- x == toupper(x) &
+    grepl("[A-Z]", x)
+  
+  x[is_all_caps] <- paste0(
+    toupper(substr(x[is_all_caps], 1, 1)),
+    tolower(substr(x[is_all_caps], 2, nchar(x[is_all_caps])))
+  )
+  
+  x
+}
+
+mtorc_genes <- to_mouse_case_explicit(mtorc_genes)
+mtorc_genes <- unique(mtorc_genes)
+
+# ------------------------------------------------------------
+# Build the complete gene-set list
+# ------------------------------------------------------------
+
+geneset_list <- list(
+  Calcium_response           = calcium_genes,
+  Muscle_injury_regeneration = muscle_genes,
+  mTOR_Akt                   = mtorc_genes
+)
+
+# Check
+cat("\nGene-set sizes:\n")
+print(sapply(geneset_list, length))
+
+cat("\nFirst mTOR genes after case correction:\n")
+print(head(geneset_list$mTOR_Akt, 30))
+pathway_gsea_results <- run_pathway_gsea(
+  geneset_list = list(
+    Calcium_response            = geneset_list$Calcium_response,
+    Muscle_injury_regeneration  = geneset_list$Muscle_injury_regeneration,
+    mTOR_Akt                    = geneset_list$mTOR_Akt
+  ),
+  contrasts = gsea_contrasts,
+  out_dir   = out_dir
+)
+
+# ---- Summary plot: NES across Disease -> Treatment vs KO -> Treatment vs WT ----
+gsea_plot_df <- pathway_gsea_results %>%
+  separate(Contrast, into = c("Arm", "Step"), sep = "\\|") %>%
+  mutate(
+    Step = factor(Step, levels = c("Disease (KO vs WT)", "Treatment vs KO", "Treatment vs WT")),
+    significance = case_when(
+      padj < 0.001 ~ "***",
+      padj < 0.01  ~ "**",
+      padj < 0.05  ~ "*",
+      TRUE         ~ "ns"
+    )
+  )
+
+p_gsea <- ggplot(gsea_plot_df, aes(x = Step, y = NES, fill = significance)) +
+  geom_col(width = 0.6) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey30") +
+  facet_grid(pathway ~ Arm) +
+  scale_fill_manual(values = c("***" = "firebrick3", "**" = "orange",
+                               "*" = "gold2", "ns" = "grey70")) +
+  theme_classic(base_size = 13) +
+  labs(y = "Normalized Enrichment Score (NES)", x = NULL, fill = "padj") +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+
+ggsave(file.path(out_dir, paste0(Sys.Date(), "_pathway_GSEA_NES_summary.pdf")),
+       plot = p_gsea, width = 9, height = 8)
+
+message("Pathway GSEA complete — see ", file.path(out_dir, paste0(Sys.Date(), "_pathway_GSEA_NES_summary.pdf")))
+EOF
+echo "done"
+Output
+
+
+
+# ============================================================
+# 8. STANDARD GENOME-WIDE GSEA
+# ============================================================
+#
+# Goal:
+#   Run unbiased GSEA across the ENTIRE ranked transcriptome.
+#
+# Comparisons:
+#   1. Disease:       KO vs WT
+#   2. Treatment vs KO
+#   3. Treatment vs WT
+#
+# Arms:
+#   sh190
+#   MOE
+#
+# Gene sets:
+#   Hallmark + GO Biological Process
+#
+# Output:
+#   - Complete GSEA result table
+#   - NES heatmap for all significantly enriched pathways
+#   - Focused heatmap of pathways significant in disease
+#     and/or altered by treatment
+# ============================================================
+
+if (!requireNamespace("fgsea", quietly = TRUE)) {
+  if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+  
+  BiocManager::install("fgsea")
+}
+
+if (!requireNamespace("msigdbr", quietly = TRUE)) {
+  install.packages("msigdbr")
+}
+
+library(fgsea)
+library(msigdbr)
+
+
+# ============================================================
+# 8.1 Direct treatment-vs-WT contrasts
+# ============================================================
+
+res_treated_vs_WT_e <- run_deseq(
+  dds,
+  "WT_empty",
+  c("condition", "Stim1R304W/+_sh190", "WT_empty")
+)
+
+res_treated_vs_WT_n <- run_deseq(
+  dds,
+  "WT_Nacl",
+  c("condition", "Stim1R304W/+_MOE", "WT_Nacl")
+)
+
+
+# ============================================================
+# 8.2 Build the six contrasts
+# ============================================================
+
+gsea_contrasts <- list(
+  
+  "sh190|Disease" =
+    res_disease_e,
+  
+  "sh190|Treatment_vs_KO" =
+    res_treated_e,
+  
+  "sh190|Treatment_vs_WT" =
+    res_treated_vs_WT_e,
+  
+  "MOE|Disease" =
+    res_disease_n,
+  
+  "MOE|Treatment_vs_KO" =
+    res_treated_n,
+  
+  "MOE|Treatment_vs_WT" =
+    res_treated_vs_WT_n
+)
+
+
+# ============================================================
+# 8.3 Get mouse Hallmark gene sets
+# ============================================================
+
+hallmark_df <- msigdbr(
+  species = "Mus musculus",
+  collection = "H"
+)
+
+hallmark_sets <- split(
+  hallmark_df$ensembl_gene,
+  hallmark_df$gs_name
+)
+
+
+# ============================================================
+# 8.4 Get mouse GO Biological Process gene sets
+# ============================================================
+
+gobp_df <- msigdbr(
+  species = "Mus musculus",
+  collection = "C5",
+  subcollection = "GO:BP"
+)
+
+gobp_sets <- split(
+  gobp_df$ensembl_gene,
+  gobp_df$gs_name
+)
+
+
+# ============================================================
+# 8.5 Combine gene sets
+# ============================================================
+
+gene_sets <- c(
+  hallmark_sets,
+  gobp_sets
+)
+
+# Remove duplicate genes within pathways
+gene_sets <- lapply(
+  gene_sets,
+  unique
+)
+
+# Keep pathways of reasonable size
+gene_sets <- gene_sets[
+  lengths(gene_sets) >= 10 &
+    lengths(gene_sets) <= 500
+]
+
+message(
+  "Number of pathways used for GSEA: ",
+  length(gene_sets)
+)
+
+
+# ============================================================
+# 8.6 Run GSEA for every contrast
+# ============================================================
+
+all_gsea <- list()
+
+for (contrast_name in names(gsea_contrasts)) {
+  
+  message("\nRunning GSEA: ", contrast_name)
+  
+  res <- gsea_contrasts[[contrast_name]]
+  
+  # ----------------------------------------------------------
+  # Rank entire transcriptome by log2FC
+  # ----------------------------------------------------------
+  
+  ranks <- res$log2FoldChange
+  
+  names(ranks) <- rownames(res)
+  
+  ranks <- ranks[
+    !is.na(ranks) &
+      is.finite(ranks)
+  ]
+  
+  # Remove duplicated Ensembl IDs
+  ranks <- ranks[
+    !duplicated(names(ranks))
+  ]
+  
+  ranks <- sort(
+    ranks,
+    decreasing = TRUE
+  )
+  
+  # ----------------------------------------------------------
+  # Run fgsea
+  # ----------------------------------------------------------
+  
+  fg <- fgsea::fgsea(
+    pathways = gene_sets,
+    stats = ranks,
+    minSize = 10,
+    maxSize = 500,
+    eps = 0
+  )
+  
+  fg <- as.data.frame(fg)
+  
+  fg$Contrast <- contrast_name
+  
+  all_gsea[[contrast_name]] <- fg
+  
+}
+
+
+# ============================================================
+# 8.7 Combine all results
+# ============================================================
+
+gsea_results <- bind_rows(all_gsea)
+
+
+# ============================================================
+# 8.8 Clean pathway names
+# ============================================================
+
+gsea_results$Pathway <- gsea_results$pathway
+
+gsea_results$Pathway_clean <- gsea_results$Pathway
+
+gsea_results$Pathway_clean <- gsub(
+  "^HALLMARK_",
+  "",
+  gsea_results$Pathway_clean
+)
+
+gsea_results$Pathway_clean <- gsub(
+  "^GO_BP_",
+  "",
+  gsea_results$Pathway_clean
+)
+
+gsea_results$Pathway_clean <- gsub(
+  "_",
+  " ",
+  gsea_results$Pathway_clean
+)
+
+
+# ============================================================
+# 8.9 Save complete GSEA results
+# ============================================================
+
+# Remove list-columns such as leadingEdge before writing CSV
+gsea_results_export <- gsea_results %>%
+  dplyr::select(
+    -dplyr::where(is.list)
+  )
+
+write.csv(
+  gsea_results_export,
+  file.path(
+    out_dir,
+    paste0(
+      Sys.Date(),
+      "_GENOME_WIDE_GSEA_all_pathways.csv"
+    )
+  ),
+  row.names = FALSE
+)
+
+message(
+  "GSEA results saved: ",
+  file.path(
+    out_dir,
+    paste0(
+      Sys.Date(),
+      "_GENOME_WIDE_GSEA_all_pathways.csv"
+    )
+  )
+)
+
+
+# ============================================================
+# 8.10 Create pathway x contrast NES matrix
+# ============================================================
+
+nes_matrix <- gsea_results %>%
+  select(
+    Pathway_clean,
+    Contrast,
+    NES
+  ) %>%
+  distinct() %>%
+  tidyr::pivot_wider(
+    names_from = Contrast,
+    values_from = NES
+  )
+
+nes_mat <- as.data.frame(nes_matrix)
+
+rownames(nes_mat) <- nes_mat$Pathway_clean
+
+nes_mat$Pathway_clean <- NULL
+
+nes_mat <- as.matrix(nes_mat)
+
+
+# ============================================================
+# 8.11 Keep pathways significantly enriched in at least one
+#      contrast
+# ============================================================
+
+sig_pathways <- gsea_results %>%
+  filter(padj < 0.05) %>%
+  count(Pathway_clean, sort = TRUE)
+
+sig_names <- sig_pathways$Pathway_clean
+
+nes_sig <- nes_mat[
+  rownames(nes_mat) %in% sig_names,
+  ,
+  drop = FALSE
+]
+
+
+# ============================================================
+# 8.12 Order columns biologically
+# ============================================================
+
+desired_columns <- c(
+  "sh190|Disease",
+  "sh190|Treatment_vs_KO",
+  "sh190|Treatment_vs_WT",
+  "MOE|Disease",
+  "MOE|Treatment_vs_KO",
+  "MOE|Treatment_vs_WT"
+)
+
+desired_columns <- intersect(
+  desired_columns,
+  colnames(nes_sig)
+)
+
+nes_sig <- nes_sig[, desired_columns, drop = FALSE]
+
+
+# ============================================================
+# 8.13 Scale pathway NES for visualization
+# ============================================================
+
+nes_scaled <- t(
+  scale(t(nes_sig))
+)
+
+# Remove pathways with undefined scaling
+nes_scaled <- nes_scaled[
+  complete.cases(nes_scaled),
+  ,
+  drop = FALSE
+]
+
+
+# ============================================================
+# 8.14 Pathway NES heatmap
+# ============================================================
+
+library(ComplexHeatmap)
+library(circlize)
+
+ht <- Heatmap(
+  nes_scaled,
+  
+  name = "NES\n(z-score)",
+  
+  col = colorRamp2(
+    c(-2, 0, 2),
+    c("navy", "white", "firebrick3")
+  ),
+  
+  cluster_rows = TRUE,
+  cluster_columns = FALSE,
+  
+  show_row_names = TRUE,
+  show_column_names = TRUE,
+  
+  row_names_gp = gpar(
+    fontsize = 7
+  ),
+  
+  column_names_gp = gpar(
+    fontsize = 10,
+    fontface = "bold"
+  ),
+  
+  column_names_rot = 45,
+  
+  row_title = "GSEA pathways",
+  
+  column_title =
+    "Genome-wide pathway enrichment across disease and treatment",
+  
+  heatmap_legend_param = list(
+    title = "NES\n(z-score)"
+  )
+)
+
+
+pdf(
+  file.path(
+    out_dir,
+    paste0(
+      Sys.Date(),
+      "_GENOME_WIDE_GSEA_NES_heatmap.pdf"
+    )
+  ),
+  width = 12,
+  height = 14
+)
+
+draw(ht)
+
+dev.off()
+
+
+# ============================================================
+# 8.15 Also save the unscaled NES matrix
+# ============================================================
+
+write.csv(
+  nes_sig,
+  file.path(
+    out_dir,
+    paste0(
+      Sys.Date(),
+      "_GENOME_WIDE_GSEA_NES_matrix.csv"
+    )
+  )
+)
+
+
+message(
+  "\n============================================================\n",
+  "GENOME-WIDE GSEA COMPLETE\n",
+  "============================================================\n",
+  "Results: ",
+  file.path(
+    out_dir,
+    paste0(
+      Sys.Date(),
+      "_GENOME_WIDE_GSEA_all_pathways.csv"
+    )
+  ),
+  "\nHeatmap: ",
+  file.path(
+    out_dir,
+    paste0(
+      Sys.Date(),
+      "_GENOME_WIDE_GSEA_NES_heatmap.pdf"
+    )
+  ),
+  "\n============================================================"
+)
+
+# ============================================================
+# Focused GSEA heatmap:
+# Muscle regeneration + Calcium response + mTORC1
+# ============================================================
+
+library(dplyr)
+library(tidyr)
+library(ComplexHeatmap)
+library(circlize)
+library(grid)
+
+# ------------------------------------------------------------
+# 1. Define pathways of interest
+# ------------------------------------------------------------
+
+pathways_of_interest <- c(
+  "GOBP_SKELETAL_MUSCLE_TISSUE_REGENERATION",
+  "GOBP_CELLULAR_RESPONSE_TO_CALCIUM_ION",
+  "HALLMARK_MTORC1_SIGNALING", "GOBP_CALCIUM_MEDIATED_SIGNALING"
+)
+
+
+# ------------------------------------------------------------
+# 2. Extract these pathways from the complete GSEA results
+# ------------------------------------------------------------
+
+focused_gsea <- gsea_results %>%
+  filter(Pathway %in% pathways_of_interest) %>%
+  select(
+    Pathway,
+    Contrast,
+    NES,
+    pval,
+    padj,
+    size
+  )
+
+
+# Check
+print(focused_gsea)
+
+
+# ------------------------------------------------------------
+# 3. Make pathway names publication-friendly
+# ------------------------------------------------------------
+
+focused_gsea <- focused_gsea %>%
+  mutate(
+    Pathway = case_when(
+      Pathway == "GOBP_SKELETAL_MUSCLE_TISSUE_REGENERATION" ~
+        "Skeletal muscle tissue regeneration",
+      
+      Pathway == "GOBP_CELLULAR_RESPONSE_TO_CALCIUM_ION" ~
+        "Cellular response to calcium ion",
+      
+      Pathway == "HALLMARK_MTORC1_SIGNALING" ~
+        "mTORC1 signaling",
+      
+      Pathway == "GOBP_CALCIUM_MEDIATED_SIGNALING" ~
+        "Caclcium mediated signaling",
+      
+      TRUE ~ Pathway
+    )
+  )
+
+
+# ------------------------------------------------------------
+# 4. Set the exact order of the six contrasts
+# ------------------------------------------------------------
+
+contrast_order <- c(
+  "sh190|Disease",
+  "sh190|Treatment_vs_KO",
+  "sh190|Treatment_vs_WT",
+  "MOE|Disease",
+  "MOE|Treatment_vs_KO",
+  "MOE|Treatment_vs_WT"
+)
+
+focused_gsea$Contrast <- factor(
+  focused_gsea$Contrast,
+  levels = contrast_order
+)
+
+
+# ------------------------------------------------------------
+# 5. Create NES matrix
+# ------------------------------------------------------------
+
+nes_matrix <- focused_gsea %>%
+  select(
+    Pathway,
+    Contrast,
+    NES
+  ) %>%
+  pivot_wider(
+    names_from = Contrast,
+    values_from = NES
+  )
+
+nes_mat <- as.data.frame(nes_matrix)
+
+rownames(nes_mat) <- nes_mat$Pathway
+
+nes_mat$Pathway <- NULL
+
+nes_mat <- as.matrix(nes_mat)
+
+# Ensure exact column order
+nes_mat <- nes_mat[
+  ,
+  contrast_order,
+  drop = FALSE
+]
+
+
+# ------------------------------------------------------------
+# 6. Create significance annotation
+# ------------------------------------------------------------
+
+sig_matrix <- focused_gsea %>%
+  mutate(
+    significance = case_when(
+      padj < 0.001 ~ "***",
+      padj < 0.01  ~ "**",
+      padj < 0.05  ~ "*",
+      TRUE         ~ ""
+    )
+  ) %>%
+  select(
+    Pathway,
+    Contrast,
+    significance
+  ) %>%
+  pivot_wider(
+    names_from = Contrast,
+    values_from = significance
+  )
+
+sig_mat <- as.data.frame(sig_matrix)
+
+rownames(sig_mat) <- sig_mat$Pathway
+
+sig_mat$Pathway <- NULL
+
+sig_mat <- as.matrix(sig_mat)
+
+sig_mat <- sig_mat[
+  rownames(nes_mat),
+  contrast_order,
+  drop = FALSE
+]
+
+
+# ------------------------------------------------------------
+# 7. Heatmap
+# ------------------------------------------------------------
+
+ht <- Heatmap(
+  nes_mat,
+  
+  name = "NES",
+  
+  col = colorRamp2(
+    c(-2, 0, 2),
+    c("blue", "white", "red")
+  ),
+  
+  cluster_rows = FALSE,
+  cluster_columns = FALSE,
+  
+  row_names_side = "left",
+  
+  row_names_gp = gpar(
+    fontsize = 11
+  ),
+  
+  column_names_gp = gpar(
+    fontsize = 10,
+    fontface = "bold"
+  ),
+  
+  column_names_rot = 45,
+  
+  # ----------------------------------------------------------
+  # White borders around individual tiles
+  # ----------------------------------------------------------
+  
+  rect_gp = gpar(
+    col = "white",
+    lwd = 1.5
+  ),
+  
+  # ----------------------------------------------------------
+  # Significance stars
+  # ----------------------------------------------------------
+  
+  cell_fun = function(
+    j, i, x, y, width, height, fill
+  ) {
+    
+    grid.text(
+      sig_mat[i, j],
+      x,
+      y,
+      gp = gpar(
+        fontsize = 12,
+        fontface = "bold"
+      )
+    )
+    
+  },
+  
+  # ----------------------------------------------------------
+  # Separate sh190 and MOE
+  # ----------------------------------------------------------
+  
+  column_split = factor(
+    c(
+      "sh190",
+      "sh190",
+      "sh190",
+      "MOE",
+      "MOE",
+      "MOE"
+    ),
+    levels = c("sh190", "MOE")
+  ),
+  
+  column_title = "Pathway-level GSEA across disease and treatment",
+  
+  column_title_gp = gpar(
+    fontsize = 14,
+    fontface = "bold"
+  ),
+  
+  heatmap_legend_param = list(
+    title = "NES"
+  )
+)
+
+
+# ------------------------------------------------------------
+# 8. Save
+# ------------------------------------------------------------
+
+pdf(
+  file.path(
+    out_dir,
+    paste0(
+      Sys.Date(),
+      "_focused_GSEA_3_pathways_heatmap.pdf"
+    )
+  ),
+  width = 11,
+  height = 4
+)
+
+draw(ht)
+
+dev.off()
+
+
+# Display in R
+draw(ht)
+
+calcium_leading_edge <- gsea_results %>%
+  filter(
+    Pathway == "GOBP_CELLULAR_RESPONSE_TO_CALCIUM_ION"
+  ) %>%
+  select(
+    Contrast,
+    NES,
+    pval,
+    padj,
+    leadingEdge
+  )
+
+calcium_leading_edge
+library(AnnotationDbi)
+library(org.Mm.eg.db)
+library(dplyr)
+library(tidyr)
+
+calcium_genes_long <- gsea_results %>%
+  filter(
+    Pathway == "GOBP_CELLULAR_RESPONSE_TO_CALCIUM_ION"
+  ) %>%
+  select(
+    Contrast,
+    NES,
+    pval,
+    padj,
+    leadingEdge
+  ) %>%
+  unnest_longer(leadingEdge) %>%
+  rename(Ensembl = leadingEdge)
+
+calcium_genes_long$Symbol <- mapIds(
+  org.Mm.eg.db,
+  keys = calcium_genes_long$Ensembl,
+  column = "SYMBOL",
+  keytype = "ENSEMBL",
+  multiVals = "first"
+)
+
+calcium_genes_long %>%
+  select(
+    Contrast,
+    Symbol,
+    Ensembl,
+    NES,
+    pval,
+    padj
+  )
+write.csv(
+  calcium_genes_long,
+  file.path(
+    out_dir,
+    paste0(Sys.Date(), "_calcium_response_leading_edge_genes.csv")
+  ),
+  row.names = FALSE
+)
+
+message(
+  "Saved: ",
+  file.path(
+    out_dir,
+    paste0(Sys.Date(), "_calcium_response_leading_edge_genes.csv")
+  )
+)
+calcium_sh190_treat <- calcium_genes_long %>%
+  filter(
+    Contrast == "sh190|Treatment_vs_KO"
+  )
+
+calcium_sh190_treat
+calcium_sh190_check <- res_treated_e %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Ensembl") %>%
+  filter(
+    Ensembl %in% calcium_sh190_treat$Ensembl
+  ) %>%
+  select(
+    Ensembl,
+    log2FoldChange,
+    padj
+  )
+
+calcium_sh190_check$Symbol <- mapIds(
+  org.Mm.eg.db,
+  keys = calcium_sh190_check$Ensembl,
+  column = "SYMBOL",
+  keytype = "ENSEMBL",
+  multiVals = "first"
+)
+
+calcium_sh190_check %>%
+  arrange(desc(log2FoldChange))
+
+
+
+
+# ============================================================
+# KEGG CALCIUM SIGNALING PATHWAY — mm04020
+# ============================================================
+
+library(KEGGREST)
+library(AnnotationDbi)
+library(org.Mm.eg.db)
+library(dplyr)
+library(tidyr)
+library(tibble)
+
+# ------------------------------------------------------------
+# 1. Get all mouse genes belonging to KEGG Calcium signaling
+# ------------------------------------------------------------
+
+calcium_kegg_links <- keggLink(
+  "mmu",
+  "path:mmu04020"
+)
+
+
+calcium_kegg_entrez <- sub(
+  "^mmu:",
+  "",
+  unname(calcium_kegg_links)
+)
+
+calcium_kegg_entrez <- unique(calcium_kegg_entrez)
+
+message(
+  "Number of KEGG Calcium signaling genes: ",
+  length(calcium_kegg_entrez)
+)
+# ------------------------------------------------------------
+# 2. Convert KEGG Entrez IDs -> Ensembl + Symbol
+# ------------------------------------------------------------
+
+calcium_kegg_annotation <- AnnotationDbi::select(
+  org.Mm.eg.db,
+  keys = calcium_kegg_entrez,
+  columns = c("SYMBOL", "ENSEMBL"),
+  keytype = "ENTREZID"
+)
+calcium_kegg_annotation <- calcium_kegg_annotation %>%
+  filter(
+    !is.na(SYMBOL),
+    !is.na(ENSEMBL)
+  ) %>%
+  distinct(ENTREZID, .keep_all = TRUE)
+
+# ------------------------------------------------------------
+# 3. Save the complete KEGG gene list
+# ------------------------------------------------------------
+
+write.csv(
+  calcium_kegg_annotation,
+  file.path(
+    out_dir,
+    paste0(
+      Sys.Date(),
+      "_KEGG_CALCIUM_SIGNALING_mm04020_genes.csv"
+    )
+  ),
+  row.names = FALSE
+)
+
+print(calcium_kegg_annotation)
+
+message(
+  "Saved KEGG Calcium signaling gene list: ",
+  file.path(
+    out_dir,
+    paste0(
+      Sys.Date(),
+      "_KEGG_CALCIUM_SIGNALING_mm04020_genes.csv"
+    )
+  )
+)
+# ============================================================
+# KEGG GENES PRESENT IN RNA-SEQ
+# ============================================================
+
+calcium_kegg_present <- calcium_kegg_annotation %>%
+  filter(
+    ENSEMBL %in% rownames(stabilized_counts)
+  )
+
+message(
+  "KEGG Calcium signaling genes in RNA-seq: ",
+  nrow(calcium_kegg_present),
+  " / ",
+  nrow(calcium_kegg_annotation)
+)
+
+# Genes missing from RNA-seq
+calcium_kegg_missing <- calcium_kegg_annotation %>%
+  filter(
+    !ENSEMBL %in% rownames(stabilized_counts)
+  )
+
+message(
+  "KEGG Calcium signaling genes absent from RNA-seq: ",
+  nrow(calcium_kegg_missing)
+)
+
+write.csv(
+  calcium_kegg_present,
+  file.path(
+    out_dir,
+    paste0(
+      Sys.Date(),
+      "_KEGG_CALCIUM_SIGNALING_genes_in_RNAseq.csv"
+    )
+  ),
+  row.names = FALSE
+)
+
+write.csv(
+  calcium_kegg_missing,
+  file.path(
+    out_dir,
+    paste0(
+      Sys.Date(),
+      "_KEGG_CALCIUM_SIGNALING_genes_missing_from_RNAseq.csv"
+    )
+  ),
+  row.names = FALSE
+)
+# ============================================================
+# KEGG CALCIUM SIGNALING — DESEQ2 RESULTS
+# ============================================================
+
+add_de_stats <- function(
+    gene_df,
+    res,
+    contrast_name
+) {
+  
+  tmp <- as.data.frame(res) %>%
+    rownames_to_column("ENSEMBL") %>%
+    select(
+      ENSEMBL,
+      log2FoldChange,
+      padj
+    )
+  
+  colnames(tmp)[2:3] <- c(
+    paste0("log2FC_", contrast_name),
+    paste0("padj_", contrast_name)
+  )
+  
+  left_join(
+    gene_df,
+    tmp,
+    by = "ENSEMBL"
+  )
+}
+
+calcium_kegg_stats <- calcium_kegg_present
+
+calcium_kegg_stats <- add_de_stats(
+  calcium_kegg_stats,
+  res_disease_e,
+  "sh190_Disease"
+)
+
+calcium_kegg_stats <- add_de_stats(
+  calcium_kegg_stats,
+  res_treated_e,
+  "sh190_Treatment_vs_KO"
+)
+
+calcium_kegg_stats <- add_de_stats(
+  calcium_kegg_stats,
+  res_treated_vs_WT_e,
+  "sh190_Treatment_vs_WT"
+)
+
+calcium_kegg_stats <- add_de_stats(
+  calcium_kegg_stats,
+  res_disease_n,
+  "MOE_Disease"
+)
+
+calcium_kegg_stats <- add_de_stats(
+  calcium_kegg_stats,
+  res_treated_n,
+  "MOE_Treatment_vs_KO"
+)
+
+calcium_kegg_stats <- add_de_stats(
+  calcium_kegg_stats,
+  res_treated_vs_WT_n,
+  "MOE_Treatment_vs_WT"
+)
+
+# Order by disease effect
+calcium_kegg_stats <- calcium_kegg_stats %>%
+  arrange(
+    desc(abs(log2FC_sh190_Disease))
+  )
+
+write.csv(
+  calcium_kegg_stats,
+  file.path(
+    out_dir,
+    paste0(
+      Sys.Date(),
+      "_KEGG_CALCIUM_SIGNALING_DESeq2_statistics.csv"
+    )
+  ),
+  row.names = FALSE
+)
+
+calcium_kegg_stats
+
+
+# ============================================================
+# KEGG CALCIUM SIGNALING — EXPRESSION HEATMAP
+# ============================================================
+
+calcium_kegg_mat <- stabilized_counts[
+  calcium_kegg_present$ENSEMBL,
+  ,
+  drop = FALSE
+]
+
+# Log transform
+calcium_kegg_mat <- log2(
+  calcium_kegg_mat + 1
+)
+
+# Gene-wise z-score
+calcium_kegg_mat <- t(
+  scale(
+    t(calcium_kegg_mat)
+  )
+)
+
+# Replace Ensembl IDs with gene symbols
+rownames(calcium_kegg_mat) <- calcium_kegg_present$SYMBOL
+
+# ------------------------------------------------------------
+# Sample order
+# ------------------------------------------------------------
+
+desired_order <- c(
+  "WT_empty",
+  "Stim1R304W/+_empty",
+  "Stim1R304W/+_sh190",
+  "WT_Nacl",
+  "Stim1R304W/+_Nacl",
+  "Stim1R304W/+_MOE"
+)
+
+coldata$condition <- factor(
+  coldata$condition,
+  levels = desired_order
+)
+
+samples_ordered <- rownames(
+  coldata[
+    order(coldata$condition),
+    ,
+    drop = FALSE
+  ]
+)
+
+# ------------------------------------------------------------
+# Column annotation
+# ------------------------------------------------------------
+
+col_ha <- HeatmapAnnotation(
+  Condition = coldata[
+    samples_ordered,
+    "condition"
+  ],
+  col = list(
+    Condition = condition_colors
+  ),
+  annotation_name_gp = gpar(
+    fontsize = 11,
+    fontface = "bold"
+  )
+)
+
+# ------------------------------------------------------------
+# Heatmap
+# ------------------------------------------------------------
+
+ht_calcium_kegg <- Heatmap(
+  calcium_kegg_mat[
+    ,
+    samples_ordered,
+    drop = FALSE
+  ],
+  
+  name = "Z-score",
+  
+  col = colorRamp2(
+    c(-2, 0, 2),
+    c("navy", "white", "firebrick3")
+  ),
+  
+  top_annotation = col_ha,
+  
+  cluster_rows = TRUE,
+  cluster_columns = FALSE,
+  
+  show_row_names = TRUE,
+  
+  row_names_side = "right",
+  
+  row_names_gp = gpar(
+    fontsize = 8,
+    fontface = "italic"
+  ),
+  
+  column_names_gp = gpar(
+    fontsize = 10
+  ),
+  
+  column_names_rot = 80,
+  
+  row_title = "KEGG Calcium signaling genes",
+  
+  row_title_gp = gpar(
+    fontsize = 13,
+    fontface = "bold"
+  ),
+  
+  column_title =
+    "KEGG Calcium signaling pathway (mm04020)",
+  
+  column_title_gp = gpar(
+    fontsize = 14,
+    fontface = "bold"
+  )
+)
+
+pdf(
+  file.path(
+    out_dir,
+    paste0(
+      Sys.Date(),
+      "_KEGG_CALCIUM_SIGNALING_mm04020_heatmap.pdf"
+    )
+  ),
+  width = 10,
+  height = max(
+    10,
+    0.18 * nrow(calcium_kegg_mat) + 4
+  )
+)
+
+draw(ht_calcium_kegg)
+
+dev.off()
+
+draw(ht_calcium_kegg)
+
+
+# ============================================================
+# SIGNIFICANT KEGG CALCIUM GENES IN DISEASE
+# ============================================================
+
+calcium_kegg_disease <- calcium_kegg_stats %>%
+  mutate(
+    sig_sh190 = !is.na(padj_sh190_Disease) &
+      padj_sh190_Disease < 0.05,
+    
+    sig_MOE = !is.na(padj_MOE_Disease) &
+      padj_MOE_Disease < 0.05,
+    
+    disease_absFC_sh190 =
+      abs(log2FC_sh190_Disease),
+    
+    disease_absFC_MOE =
+      abs(log2FC_MOE_Disease)
+  ) %>%
+  filter(
+    sig_sh190 | sig_MOE
+  ) %>%
+  arrange(
+    desc(
+      pmax(
+        disease_absFC_sh190,
+        disease_absFC_MOE,
+        na.rm = TRUE
+      )
+    )
+  )
+
+write.csv(
+  calcium_kegg_disease,
+  file.path(
+    out_dir,
+    paste0(
+      Sys.Date(),
+      "_KEGG_CALCIUM_SIGNALING_disease_DE_genes.csv"
+    )
+  ),
+  row.names = FALSE
+)
+
+calcium_kegg_disease
+
+
+
+# ============================================================
+# KEGG CALCIUM SIGNALING — RESCUE ANALYSIS
+# ============================================================
+
+calculate_kegg_rescue <- function(
+    gene_df,
+    disease_res,
+    treatment_res,
+    arm_name,
+    log2FC_cutoff = 0.5,
+    padj_cutoff = 0.05
+) {
+  
+  disease_df <- as.data.frame(disease_res) %>%
+    rownames_to_column("ENSEMBL")
+  
+  treatment_df <- as.data.frame(treatment_res) %>%
+    rownames_to_column("ENSEMBL")
+  
+  out <- gene_df %>%
+    select(
+      ENTREZID,
+      SYMBOL,
+      ENSEMBL
+    ) %>%
+    left_join(
+      disease_df %>%
+        select(
+          ENSEMBL,
+          log2FoldChange,
+          padj
+        ),
+      by = "ENSEMBL"
+    ) %>%
+    rename(
+      log2FC_disease = log2FoldChange,
+      padj_disease = padj
+    ) %>%
+    left_join(
+      treatment_df %>%
+        select(
+          ENSEMBL,
+          log2FoldChange,
+          padj
+        ),
+      by = "ENSEMBL"
+    ) %>%
+    rename(
+      log2FC_treatment_vs_KO = log2FoldChange,
+      padj_treatment_vs_KO = padj
+    ) %>%
+    mutate(
+      Arm = arm_name
+    ) %>%
+    filter(
+      !is.na(padj_disease),
+      padj_disease < padj_cutoff,
+      abs(log2FC_disease) >= log2FC_cutoff
+    ) %>%
+    mutate(
+      
+      # Reconstruct treatment vs WT
+      log2FC_treatment_vs_WT =
+        log2FC_disease +
+        log2FC_treatment_vs_KO,
+      
+      # Same rescue definition as your existing pipeline
+      rescue_metric =
+        100 *
+        (
+          log2FC_disease -
+            log2FC_treatment_vs_WT
+        ) /
+        log2FC_disease,
+      
+      rescue_status = cut(
+        rescue_metric,
+        breaks = c(
+          -Inf,
+          0,
+          30,
+          80,
+          120,
+          Inf
+        ),
+        labels = c(
+          "Worsened",
+          "Not rescued",
+          "Partially rescued",
+          "Rescued",
+          "Over-corrected"
+        )
+      )
+    )
+  
+  out
+}
+
+# sh190
+calcium_kegg_rescue_sh190 <- calculate_kegg_rescue(
+  calcium_kegg_present,
+  res_disease_e,
+  res_treated_e,
+  "sh190"
+)
+
+# MOE
+calcium_kegg_rescue_MOE <- calculate_kegg_rescue(
+  calcium_kegg_present,
+  res_disease_n,
+  res_treated_n,
+  "MOE"
+)
+
+calcium_kegg_rescue <- bind_rows(
+  calcium_kegg_rescue_sh190,
+  calcium_kegg_rescue_MOE
+)
+
+write.csv(
+  calcium_kegg_rescue,
+  file.path(
+    out_dir,
+    paste0(
+      Sys.Date(),
+      "_KEGG_CALCIUM_SIGNALING_rescue_table.csv"
+    )
+  ),
+  row.names = FALSE
+)
+
+calcium_kegg_rescue
+
+
+
+# ============================================================
+# RESCUED KEGG CALCIUM SIGNALING GENES
+# ============================================================
+
+calcium_kegg_rescued <- calcium_kegg_rescue %>%
+  filter(
+    rescue_metric >= 30
+  ) %>%
+  arrange(
+    desc(rescue_metric)
+  )
+
+write.csv(
+  calcium_kegg_rescued,
+  file.path(
+    out_dir,
+    paste0(
+      Sys.Date(),
+      "_KEGG_CALCIUM_SIGNALING_rescued_genes.csv"
+    )
+  ),
+  row.names = FALSE
+)
+
+calcium_kegg_rescued
+
+\
+
+
+# ============================================================
+# ---- 9. Pathway-annotated expression heatmap from a curated
+#          Excel panel (Pathway, Genes columns)
+# ============================================================
+# Left annotation = Pathway/sub-pathway (from your Excel column, in the
+# order it appears there), top annotation = genotype/condition, exactly
+# like your original ca_genes ComplexHeatmap. Works for any two-column
+# (Pathway, Genes) Excel file, not just the calcium signaling panel.
+if (!requireNamespace("RColorBrewer", quietly = TRUE)) install.packages("RColorBrewer")
+library(RColorBrewer)
+
+build_pathway_annotated_heatmap <- function(xlsx_path,
+                                            stabilized_counts,
+                                            coldata,
+                                            condition_colors,
+                                            out_dir,
+                                            heatmap_title = "Gene panel",
+                                            out_filename = "pathway_heatmap",
+                                            row_label_fontsize = 9) {
+  
+  dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+  
+  raw <- read_excel(xlsx_path)
+  colnames(raw)[1:2] <- c("Pathway", "GeneSymbol")
+  raw$Pathway    <- trimws(as.character(raw$Pathway))
+  raw$GeneSymbol <- trimws(as.character(raw$GeneSymbol))
+  raw <- raw[!is.na(raw$GeneSymbol) & raw$GeneSymbol != "", ]
+  
+  # Map each ORIGINAL symbol -> Ensembl, case-robust (as-is, then
+  # mouse-cased SYMBOL, then mouse-cased ALIAS) — kept separate from
+  # get_geneset_ensembl() so the Pathway label stays attached per gene.
+  to_mouse_case <- function(x) paste0(toupper(substr(x, 1, 1)), tolower(substr(x, 2, nchar(x))))
+  unique_symbols <- unique(raw$GeneSymbol)
+  orig_to_ensembl <- sapply(unique_symbols, function(sym) {
+    e <- suppressMessages(mapIds(org.Mm.eg.db, keys = sym, column = "ENSEMBL",
+                                 keytype = "SYMBOL", multiVals = "first"))
+    if (is.na(e)) e <- suppressMessages(mapIds(org.Mm.eg.db, keys = to_mouse_case(sym), column = "ENSEMBL",
+                                               keytype = "SYMBOL", multiVals = "first"))
+    if (is.na(e)) e <- suppressMessages(mapIds(org.Mm.eg.db, keys = to_mouse_case(sym), column = "ENSEMBL",
+                                               keytype = "ALIAS", multiVals = "first"))
+    unname(e)
+  })
+  
+  raw$Ensembl <- orig_to_ensembl[raw$GeneSymbol]
+  missing <- raw[is.na(raw$Ensembl), ]
+  if (nrow(missing) > 0) {
+    message(nrow(missing), " gene(s) could not be mapped and will be dropped: ",
+            paste(missing$GeneSymbol, collapse = ", "))
+  }
+  raw <- raw[!is.na(raw$Ensembl), ]
+  raw <- raw[raw$Ensembl %in% rownames(stabilized_counts), ]
+  
+  if (nrow(raw) < 2) {
+    message("Fewer than 2 genes available in the expression matrix — skipping heatmap.")
+    return(invisible(NULL))
+  }
+  
+  raw$Symbol <- suppressMessages(mapIds(org.Mm.eg.db, keys = raw$Ensembl, column = "SYMBOL",
+                                        keytype = "ENSEMBL", multiVals = "first"))
+  
+  mat <- stabilized_counts[raw$Ensembl, , drop = FALSE]
+  mat <- t(scale(t(log2(mat + 1))))
+  rownames(mat) <- raw$Symbol
+  
+  # Preserve pathway order as it appears in the Excel file (not alphabetical)
+  raw$Pathway <- factor(raw$Pathway, levels = unique(raw$Pathway))
+  row_split <- raw$Pathway
+  
+  desired_order <- c("WT_empty", "Stim1R304W/+_empty", "Stim1R304W/+_sh190",
+                     "WT_Nacl", "Stim1R304W/+_Nacl", "Stim1R304W/+_MOE")
+  coldata$condition <- factor(coldata$condition, levels = desired_order)
+  sample_order <- rownames(coldata[order(coldata$condition), ])
+  mat <- mat[, sample_order]
+  
+  # Two-level column split: Arm (sh190 vs MOE) is the OUTER split, gets
+  # the wider gap/border; Condition within each arm is the INNER split,
+  # gets a thinner gap/border. ComplexHeatmap draws a border at every
+  # split boundary when column_split has multiple columns like this.
+  group_sh  <- c("WT_empty", "Stim1R304W/+_empty", "Stim1R304W/+_sh190")
+  group_moe <- c("WT_Nacl", "Stim1R304W/+_Nacl", "Stim1R304W/+_MOE")
+  sample_condition <- as.character(coldata[sample_order, "condition"])
+  sample_arm <- ifelse(sample_condition %in% group_sh, "sh190 arm", "MOE arm")
+  
+  col_split_df <- data.frame(
+    Arm       = factor(sample_arm, levels = c("sh190 arm", "MOE arm")),
+    Condition = factor(sample_condition, levels = desired_order)
+  )
+  
+  # column_gap needs ONE VALUE PER LEAF COLUMN SLICE (here: one per
+  # condition present, in order) — not one per split level. Use a wide
+  # gap only at the boundary where the arm actually changes.
+  condition_levels_present <- levels(droplevels(col_split_df$Condition))
+  arm_per_slice <- sapply(condition_levels_present, function(cond) {
+    as.character(col_split_df$Arm[col_split_df$Condition == cond][1])
+  })
+  gap_values <- rep(1.2, length(condition_levels_present))
+  if (length(gap_values) > 1) {
+    for (i in seq_len(length(gap_values) - 1)) {
+      if (arm_per_slice[i] != arm_per_slice[i + 1]) gap_values[i] <- 4
+    }
+  }
+  column_gap_units <- do.call(unit.c, lapply(gap_values, unit, units = "mm"))
+  
+  n_pathways <- length(levels(raw$Pathway))
+  pathway_colors <- setNames(
+    colorRampPalette(brewer.pal(min(max(n_pathways, 3), 8), "Set2"))(n_pathways),
+    levels(raw$Pathway)
+  )
+  row_ha <- rowAnnotation(
+    Pathway = raw$Pathway,
+    col = list(Pathway = pathway_colors),
+    annotation_name_gp = gpar(fontsize = 10, fontface = "bold"),
+    show_legend = TRUE
+  )
+  
+  col_ha <- HeatmapAnnotation(
+    Condition = coldata[sample_order, "condition"],
+    col = list(Condition = condition_colors),
+    annotation_name_gp = gpar(fontsize = 10, fontface = "bold")
+  )
+  
+  ht <- Heatmap(
+    mat,
+    name = "Z-score",
+    col = colorRamp2(c(-2, 0, 2), c("navy", "white", "firebrick3")),
+    top_annotation = col_ha,
+    left_annotation = row_ha,
+    row_split = row_split,
+    cluster_rows = TRUE,
+    cluster_row_slices = FALSE,
+    cluster_columns = FALSE,
+    column_split = col_split_df,
+    cluster_column_slices = FALSE,
+    column_gap = column_gap_units,   # wide gap where arm changes, thin gap between conditions
+    border = TRUE,
+    column_title = NULL,                  # condition identity already shown by top annotation colors
+    row_names_side = "right",
+    row_names_gp = gpar(fontsize = row_label_fontsize, fontface = "italic"),
+    column_names_gp = gpar(fontsize = 10),
+    column_names_rot = 80,
+    row_title_gp = gpar(fontsize = 7, fontface = "bold")
+  )
+  
+  pdf(file.path(out_dir, paste0(Sys.Date(), "_", out_filename, ".pdf")),
+      width = 10, height = max(8, 0.22 * nrow(mat) + 4))
+  draw(ht, column_title = heatmap_title, column_title_gp = gpar(fontsize = 13, fontface = "bold"),
+       heatmap_legend_side = "right", annotation_legend_side = "right")
+  dev.off()
+  
+  message("Saved pathway heatmap: ", file.path(out_dir, paste0(Sys.Date(), "_", out_filename, ".pdf")))
+  invisible(list(matrix = mat, annotation = raw, heatmap = ht))
+}
+
+# ---- Run for your curated calcium signaling panel ----
+calcium_pathway_panel <- build_pathway_annotated_heatmap(
+  xlsx_path         = "260811_output/260813_calcium_signalling_genes.xlsx",
+  stabilized_counts = stabilized_counts,
+  coldata           = coldata,
+  condition_colors  = condition_colors,
+  out_dir           = calcium_out,
+  heatmap_title     = "Calcium signaling gene panel",
+  out_filename      = "calcium_signaling_pathway_heatmap"
+)
