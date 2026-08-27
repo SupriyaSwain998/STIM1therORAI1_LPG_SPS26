@@ -1,0 +1,25 @@
+"Pathway","Contrast","NES","pval","padj","size"
+"Caclcium mediated signaling","sh190|Disease",1.31031002908211,0.0387359836901121,0.237126085275405,81
+"Cellular response to calcium ion","sh190|Disease",1.22064484316123,0.195232690124858,0.604218193069559,24
+"Skeletal muscle tissue regeneration","sh190|Disease",1.1612970964527,0.300117233294256,0.735907706070767,19
+"mTORC1 signaling","sh190|Disease",1.1173931632305,0.196803196803197,0.604218193069559,201
+"Caclcium mediated signaling","sh190|Treatment_vs_KO",1.0790973320876,0.322463768115942,0.604837446141794,63
+"Cellular response to calcium ion","sh190|Treatment_vs_KO",2.14405477462656,2.43386870621883e-05,0.00633414330793451,21
+"Skeletal muscle tissue regeneration","sh190|Treatment_vs_KO",-1.8212092337337,0.00130302490343648,0.064592805927494,18
+"mTORC1 signaling","sh190|Treatment_vs_KO",-1.44054006823868,0.00822456431621393,0.150206516722433,196
+"Caclcium mediated signaling","sh190|Treatment_vs_WT",1.33967511674425,0.0254065040650406,0.195436553484318,81
+"Cellular response to calcium ion","sh190|Treatment_vs_WT",1.25226714503925,0.172811059907834,0.601446757055261,24
+"Skeletal muscle tissue regeneration","sh190|Treatment_vs_WT",0.85180086200704,0.728038507821901,1,19
+"mTORC1 signaling","sh190|Treatment_vs_WT",0.963569092029516,0.611,0.987270503597122,201
+"Caclcium mediated signaling","MOE|Disease",0.988032711303928,0.541116751269036,1,81
+"Cellular response to calcium ion","MOE|Disease",0.774643544460295,0.79337899543379,1,24
+"Skeletal muscle tissue regeneration","MOE|Disease",0.901218768378918,0.639150943396226,1,19
+"mTORC1 signaling","MOE|Disease",0.945971326168021,0.656343656343656,1,201
+"Caclcium mediated signaling","MOE|Treatment_vs_KO",-0.760943553181144,0.9504,1,85
+"Cellular response to calcium ion","MOE|Treatment_vs_KO",1.85025495860015,0.000504619224733493,0.0204637937371335,25
+"Skeletal muscle tissue regeneration","MOE|Treatment_vs_KO",-0.478929146083551,0.996350364963504,1,19
+"mTORC1 signaling","MOE|Treatment_vs_KO",-0.783123199341451,0.963715529753266,1,201
+"Caclcium mediated signaling","MOE|Treatment_vs_WT",0.984944427201435,0.547150259067357,1,81
+"Cellular response to calcium ion","MOE|Treatment_vs_WT",1.30892753321563,0.122988505747126,0.843937875751503,24
+"Skeletal muscle tissue regeneration","MOE|Treatment_vs_WT",0.955949649050358,0.565789473684211,1,19
+"mTORC1 signaling","MOE|Treatment_vs_WT",0.901260299831386,0.768231768231768,1,201

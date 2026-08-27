@@ -2513,7 +2513,7 @@ build_pathway_annotated_heatmap <- function(xlsx_path,
   )
   
   pdf(file.path(out_dir, paste0(Sys.Date(), "_", out_filename, ".pdf")),
-      width = 10, height = max(8, 0.22 * nrow(mat) + 4))
+      width = 15, height = max(8, 0.22 * nrow(mat) + 4))
   draw(ht, column_title = heatmap_title, column_title_gp = gpar(fontsize = 13, fontface = "bold"),
        heatmap_legend_side = "right", annotation_legend_side = "right")
   dev.off()
@@ -2542,3 +2542,334 @@ save.image(
 )
 
 message("Workspace saved successfully!")
+
+
+
+
+# ============================================================
+# 20260814_recover_wiped_outputs.R
+#
+# ONE-TIME RECOVERY after 260811_output/ got wiped by unlink().
+# Nothing here re-runs DESeq2, GSEA, or any statistics — it only
+# re-draws/re-writes from R objects that are still sitting in your
+# current session (confirmed present via ls()).
+#
+# Run this top to bottom in the SAME R session where those objects
+# still exist. Every block is wrapped in exists()/is.null() checks,
+# so it's safe to run even if some objects aren't there.
+# ============================================================
+
+# ---- 0. Recreate folders (non-destructive — see the fixed pipeline script) ----
+dir.create(out_dir,     recursive = TRUE, showWarnings = FALSE)
+dir.create(calcium_out, recursive = TRUE, showWarnings = FALSE)
+dir.create(muscle_out,  recursive = TRUE, showWarnings = FALSE)
+dir.create(mtorc_out,   recursive = TRUE, showWarnings = FALSE)
+
+resave_heatmap <- function(ht_obj, path, width = 9, height = 11, ...) {
+  if (is.null(ht_obj)) { message("Skipping (NULL/not found): ", path); return(invisible(NULL)) }
+  pdf(path, width = width, height = height)
+  draw(ht_obj, ...)
+  dev.off()
+  message("Re-saved: ", path)
+}
+
+resave_csv <- function(df, path) {
+  if (is.null(df)) { message("Skipping (NULL/not found): ", path); return(invisible(NULL)) }
+  write.csv(df, path, row.names = FALSE)
+  message("Re-saved: ", path)
+}
+
+# ============================================================
+# ---- 1. Calcium_response (run_full_geneset_pipeline output) ----
+# ============================================================
+if (exists("results_calcium")) {
+  resave_heatmap(results_calcium$heatmaps$combined,
+                 file.path(calcium_out, paste0(Sys.Date(), "_Calcium_response_heatmap_combined.pdf")), 9, 11)
+  resave_heatmap(results_calcium$heatmaps$sh,
+                 file.path(calcium_out, paste0(Sys.Date(), "_Calcium_response_heatmap_sh.pdf")), 7, 11)
+  resave_heatmap(results_calcium$heatmaps$moe,
+                 file.path(calcium_out, paste0(Sys.Date(), "_Calcium_response_heatmap_MOE.pdf")), 7, 11)
+  resave_csv(results_calcium$heatmaps$table,
+             file.path(calcium_out, paste0(Sys.Date(), "_Calcium_response_top_stats.csv")))
+  resave_csv(results_calcium$rescue$table,
+             file.path(calcium_out, paste0(Sys.Date(), "_Calcium_response_rescue_table.csv")))
+  if (!is.null(results_calcium$rescue_heatmap)) {
+    resave_heatmap(results_calcium$rescue_heatmap$combined,
+                   file.path(calcium_out, paste0(Sys.Date(), "_Calcium_response_RESCUED_heatmap_combined.pdf")), 10, 10)
+    resave_heatmap(results_calcium$rescue_heatmap$sh190,
+                   file.path(calcium_out, paste0(Sys.Date(), "_Calcium_response_RESCUED_heatmap_sh190.pdf")), 8, 10)
+    resave_heatmap(results_calcium$rescue_heatmap$moe,
+                   file.path(calcium_out, paste0(Sys.Date(), "_Calcium_response_RESCUED_heatmap_MOE.pdf")), 8, 10)
+    resave_csv(results_calcium$rescue_heatmap$genes,
+               file.path(calcium_out, paste0(Sys.Date(), "_Calcium_response_rescued_genes_for_heatmap.csv")))
+  }
+}
+resave_csv(if (exists("rescue_calcium")) rescue_calcium$table else NULL,
+           file.path(calcium_out, paste0(Sys.Date(), "_Calcium_response_rescue_table_standalone.csv")))
+
+if (exists("barplots_calcium")) {
+  message(length(barplots_calcium), " calcium bar plot objects found in memory — ",
+          "re-run plot_rescued_gene_barplots() for calcium to regenerate the PNGs ",
+          "(cheap, no stats recomputed).")
+}
+
+# ============================================================
+# ---- 2. Muscle_injury_regeneration ----
+# ============================================================
+if (exists("results_muscle_regen")) {
+  resave_heatmap(results_muscle_regen$heatmaps$combined,
+                 file.path(muscle_out, paste0(Sys.Date(), "_Muscle_injury_regeneration_heatmap_combined.pdf")), 9, 11)
+  resave_heatmap(results_muscle_regen$heatmaps$sh,
+                 file.path(muscle_out, paste0(Sys.Date(), "_Muscle_injury_regeneration_heatmap_sh.pdf")), 7, 11)
+  resave_heatmap(results_muscle_regen$heatmaps$moe,
+                 file.path(muscle_out, paste0(Sys.Date(), "_Muscle_injury_regeneration_heatmap_MOE.pdf")), 7, 11)
+  resave_csv(results_muscle_regen$heatmaps$table,
+             file.path(muscle_out, paste0(Sys.Date(), "_Muscle_injury_regeneration_top_stats.csv")))
+  resave_csv(results_muscle_regen$rescue$table,
+             file.path(muscle_out, paste0(Sys.Date(), "_Muscle_injury_regeneration_rescue_table.csv")))
+  if (!is.null(results_muscle_regen$rescue_heatmap)) {
+    resave_heatmap(results_muscle_regen$rescue_heatmap$combined,
+                   file.path(muscle_out, paste0(Sys.Date(), "_Muscle_injury_regeneration_RESCUED_heatmap_combined.pdf")), 10, 10)
+    resave_heatmap(results_muscle_regen$rescue_heatmap$sh190,
+                   file.path(muscle_out, paste0(Sys.Date(), "_Muscle_injury_regeneration_RESCUED_heatmap_sh190.pdf")), 8, 10)
+    resave_heatmap(results_muscle_regen$rescue_heatmap$moe,
+                   file.path(muscle_out, paste0(Sys.Date(), "_Muscle_injury_regeneration_RESCUED_heatmap_MOE.pdf")), 8, 10)
+    resave_csv(results_muscle_regen$rescue_heatmap$genes,
+               file.path(muscle_out, paste0(Sys.Date(), "_Muscle_injury_regeneration_rescued_genes_for_heatmap.csv")))
+  }
+}
+
+# ============================================================
+# ---- 3. mTOR_Akt / mTORC pathway ----
+# ============================================================
+if (exists("results_mtorc")) {
+  resave_heatmap(results_mtorc$heatmaps$combined,
+                 file.path(mtorc_out, paste0(Sys.Date(), "_mTORC_pathway_heatmap_combined.pdf")), 9, 11)
+  resave_heatmap(results_mtorc$heatmaps$sh,
+                 file.path(mtorc_out, paste0(Sys.Date(), "_mTORC_pathway_heatmap_sh.pdf")), 7, 11)
+  resave_heatmap(results_mtorc$heatmaps$moe,
+                 file.path(mtorc_out, paste0(Sys.Date(), "_mTORC_pathway_heatmap_MOE.pdf")), 7, 11)
+  resave_csv(results_mtorc$heatmaps$table,
+             file.path(mtorc_out, paste0(Sys.Date(), "_mTORC_pathway_top_stats.csv")))
+  resave_csv(results_mtorc$rescue$table,
+             file.path(mtorc_out, paste0(Sys.Date(), "_mTORC_pathway_rescue_table.csv")))
+  if (!is.null(results_mtorc$rescue_heatmap)) {
+    resave_heatmap(results_mtorc$rescue_heatmap$combined,
+                   file.path(mtorc_out, paste0(Sys.Date(), "_mTORC_pathway_RESCUED_heatmap_combined.pdf")), 10, 10)
+    resave_heatmap(results_mtorc$rescue_heatmap$sh190,
+                   file.path(mtorc_out, paste0(Sys.Date(), "_mTORC_pathway_RESCUED_heatmap_sh190.pdf")), 8, 10)
+    resave_heatmap(results_mtorc$rescue_heatmap$moe,
+                   file.path(mtorc_out, paste0(Sys.Date(), "_mTORC_pathway_RESCUED_heatmap_MOE.pdf")), 8, 10)
+    resave_csv(results_mtorc$rescue_heatmap$genes,
+               file.path(mtorc_out, paste0(Sys.Date(), "_mTORC_pathway_rescued_genes_for_heatmap.csv")))
+  }
+}
+
+# ============================================================
+# ---- 4. Curated calcium signaling pathway panel (Excel-based) ----
+# ============================================================
+if (exists("calcium_pathway_panel") && !is.null(calcium_pathway_panel)) {
+  resave_heatmap(calcium_pathway_panel$heatmap,
+                 file.path(calcium_out, paste0(Sys.Date(), "_calcium_signaling_pathway_heatmap.pdf")),
+                 width = 10, height = max(8, 0.22 * nrow(calcium_pathway_panel$matrix) + 4))
+  resave_csv(calcium_pathway_panel$annotation,
+             file.path(calcium_out, paste0(Sys.Date(), "_calcium_signaling_pathway_gene_annotation.csv")))
+}
+
+# ============================================================
+# ---- 5. Custom 3-geneset pathway GSEA (fgsea, run_pathway_gsea) ----
+# ============================================================
+resave_csv(if (exists("pathway_gsea_results")) pathway_gsea_results else NULL,
+           file.path(out_dir, paste0(Sys.Date(), "_pathway_GSEA_results.csv")))
+if (exists("p_gsea")) {
+  ggsave(file.path(out_dir, paste0(Sys.Date(), "_pathway_GSEA_NES_summary.pdf")), plot = p_gsea, width = 9, height = 8)
+  message("Re-saved: ", file.path(out_dir, paste0(Sys.Date(), "_pathway_GSEA_NES_summary.pdf")))
+}
+
+# ============================================================
+# ---- 6. Genome-wide GSEA (msigdbr Hallmark + GO:BP) ----
+# ============================================================
+if (exists("gsea_results")) {
+  gsea_results_export <- gsea_results %>% dplyr::select(-dplyr::where(is.list))
+  resave_csv(gsea_results_export, file.path(out_dir, paste0(Sys.Date(), "_GENOME_WIDE_GSEA_all_pathways.csv")))
+}
+resave_csv(if (exists("nes_sig")) as.data.frame(nes_sig) else NULL,
+           file.path(out_dir, paste0(Sys.Date(), "_GENOME_WIDE_GSEA_NES_matrix.csv")))
+
+# `ht` was reused across multiple heatmap blocks in your session, so it
+# currently holds only the LAST one that ran — rebuild both explicitly
+# from the underlying matrices (which ARE intact) rather than relying on `ht`.
+if (exists("nes_scaled")) {
+  ht_genome_wide <- Heatmap(
+    nes_scaled, name = "NES\n(z-score)",
+    col = colorRamp2(c(-2, 0, 2), c("navy", "white", "firebrick3")),
+    cluster_rows = TRUE, cluster_columns = FALSE,
+    show_row_names = TRUE, show_column_names = TRUE,
+    row_names_gp = gpar(fontsize = 7),
+    column_names_gp = gpar(fontsize = 10, fontface = "bold"),
+    column_names_rot = 45,
+    row_title = "GSEA pathways",
+    column_title = "Genome-wide pathway enrichment across disease and treatment",
+    heatmap_legend_param = list(title = "NES\n(z-score)")
+  )
+  resave_heatmap(ht_genome_wide, file.path(out_dir, paste0(Sys.Date(), "_GENOME_WIDE_GSEA_NES_heatmap.pdf")),
+                 width = 12, height = 14)
+} else {
+  message("nes_scaled not found — can't rebuild the genome-wide NES heatmap without re-running GSEA.")
+}
+
+# ============================================================
+# ---- 7. Focused 4-pathway GSEA heatmap (muscle/calcium/mTORC1) ----
+# ============================================================
+resave_csv(if (exists("focused_gsea")) focused_gsea else NULL,
+           file.path(out_dir, paste0(Sys.Date(), "_focused_GSEA_pathways_table.csv")))
+
+if (exists("nes_mat") && exists("sig_mat")) {
+  ht_focused <- Heatmap(
+    nes_mat, name = "NES",
+    col = colorRamp2(c(-2, 0, 2), c("blue", "white", "red")),
+    cluster_rows = FALSE, cluster_columns = FALSE,
+    row_names_side = "left", row_names_gp = gpar(fontsize = 11),
+    column_names_gp = gpar(fontsize = 10, fontface = "bold"), column_names_rot = 45,
+    rect_gp = gpar(col = "white", lwd = 1.5),
+    cell_fun = function(j, i, x, y, width, height, fill) {
+      grid.text(sig_mat[i, j], x, y, gp = gpar(fontsize = 12, fontface = "bold"))
+    },
+    column_split = factor(c("sh190","sh190","sh190","MOE","MOE","MOE"), levels = c("sh190","MOE")),
+    column_title = "Pathway-level GSEA across disease and treatment",
+    column_title_gp = gpar(fontsize = 14, fontface = "bold"),
+    heatmap_legend_param = list(title = "NES")
+  )
+  resave_heatmap(ht_focused, file.path(out_dir, paste0(Sys.Date(), "_focused_GSEA_pathways_heatmap.pdf")), 11, 4)
+} else {
+  message("nes_mat/sig_mat not found — can't rebuild the focused GSEA heatmap without re-deriving them from gsea_results.")
+}
+
+# ============================================================
+# ---- 8. KEGG calcium signaling (mm04020) ----
+# ============================================================
+resave_csv(if (exists("calcium_kegg_annotation")) calcium_kegg_annotation else NULL,
+           file.path(out_dir, paste0(Sys.Date(), "_KEGG_CALCIUM_SIGNALING_mm04020_genes.csv")))
+resave_csv(if (exists("calcium_kegg_present")) calcium_kegg_present else NULL,
+           file.path(out_dir, paste0(Sys.Date(), "_KEGG_CALCIUM_SIGNALING_genes_in_RNAseq.csv")))
+resave_csv(if (exists("calcium_kegg_missing")) calcium_kegg_missing else NULL,
+           file.path(out_dir, paste0(Sys.Date(), "_KEGG_CALCIUM_SIGNALING_genes_missing_from_RNAseq.csv")))
+resave_csv(if (exists("calcium_kegg_stats")) calcium_kegg_stats else NULL,
+           file.path(out_dir, paste0(Sys.Date(), "_KEGG_CALCIUM_SIGNALING_DESeq2_statistics.csv")))
+resave_csv(if (exists("calcium_kegg_disease")) calcium_kegg_disease else NULL,
+           file.path(out_dir, paste0(Sys.Date(), "_KEGG_CALCIUM_SIGNALING_disease_DE_genes.csv")))
+resave_csv(if (exists("calcium_kegg_rescue")) calcium_kegg_rescue else NULL,
+           file.path(out_dir, paste0(Sys.Date(), "_KEGG_CALCIUM_SIGNALING_rescue_table.csv")))
+resave_csv(if (exists("calcium_kegg_rescued")) calcium_kegg_rescued else NULL,
+           file.path(out_dir, paste0(Sys.Date(), "_KEGG_CALCIUM_SIGNALING_rescued_genes.csv")))
+if (exists("ht_calcium_kegg")) {
+  resave_heatmap(ht_calcium_kegg, file.path(out_dir, paste0(Sys.Date(), "_KEGG_CALCIUM_SIGNALING_mm04020_heatmap.pdf")),
+                 width = 10, height = if (exists("calcium_kegg_mat")) max(10, 0.18 * nrow(calcium_kegg_mat) + 4) else 12)
+}
+
+# ============================================================
+# ---- 9. Calcium leading-edge genes (per-contrast, earlier extraction) ----
+# ============================================================
+resave_csv(if (exists("calcium_genes_long")) calcium_genes_long else NULL,
+           file.path(out_dir, paste0(Sys.Date(), "_calcium_response_leading_edge_genes.csv")))
+
+message("\n=== Recovery pass complete. Check ", out_dir, " and its subfolders. ===\n")
+message("Still outstanding (not lost — just never finished running):")
+message(" - Section 10 (focused_leadingedge_stats + focused_pathways_leadingedge_heatmap): ",
+        "re-run it now, everything it needs (gsea_results, res_disease_e/n, res_treated_e/n, ",
+        "res_treated_vs_WT_e/n) is present.")
+message(" - barplots_calcium / barplots_muscle_regen (per-gene PNGs): the plot objects exist ",
+        "in memory but re-running plot_rescued_gene_barplots() is cheap and will regenerate ",
+        "the PNG files directly.")
+
+
+
+# ============================================================
+# ---- 10. Genes behind the focused GSEA pathways, across
+#           conditions
+# ============================================================
+# The NES summary tells you a pathway moved — this shows you WHICH genes
+# drove that, and how each of them individually behaves across all 6
+# genotypes/treatments. Pulls the leadingEdge gene list straight out of
+# your genome-wide GSEA results (gsea_results, from the msigdbr/fgsea run)
+# for the 4 focused pathways, unions the Disease-contrast leading edges
+# per pathway (the genes actually driving the disease-state enrichment),
+# and reuses the same heatmap style as section 9.
+
+focused_pathways <- c(
+  "GOBP_SKELETAL_MUSCLE_TISSUE_REGENERATION",
+  "GOBP_CELLULAR_RESPONSE_TO_CALCIUM_ION",
+  "GOBP_CALCIUM_MEDIATED_SIGNALING",
+  "HALLMARK_MTORC1_SIGNALING"
+)
+
+focused_pathway_labels <- c(
+  "GOBP_SKELETAL_MUSCLE_TISSUE_REGENERATION" = "Skeletal muscle tissue regeneration",
+  "GOBP_CELLULAR_RESPONSE_TO_CALCIUM_ION"     = "Cellular response to calcium ion",
+  "GOBP_CALCIUM_MEDIATED_SIGNALING"           = "Calcium mediated signaling",
+  "HALLMARK_MTORC1_SIGNALING"                 = "mTORC1 signaling"
+)
+
+# Extract the leading-edge gene list per pathway from the Disease contrasts
+# (both arms) — these are the genes actually driving each pathway's
+# dysregulation signature, not the full (much larger) gene set membership.
+focused_leadingedge_genes <- gsea_results %>%
+  filter(Pathway %in% focused_pathways,
+         Contrast %in% c("sh190|Disease", "MOE|Disease")) %>%
+  select(Pathway, Contrast, leadingEdge) %>%
+  tidyr::unnest_longer(leadingEdge) %>%
+  rename(Ensembl = leadingEdge) %>%
+  distinct(Pathway, Ensembl) %>%
+  filter(Ensembl %in% rownames(stabilized_counts))
+
+focused_leadingedge_genes$Symbol <- suppressMessages(mapIds(
+  org.Mm.eg.db, keys = focused_leadingedge_genes$Ensembl,
+  column = "SYMBOL", keytype = "ENSEMBL", multiVals = "first"
+))
+focused_leadingedge_genes$Pathway <- recode(focused_leadingedge_genes$Pathway, !!!focused_pathway_labels)
+focused_leadingedge_genes$Pathway <- factor(focused_leadingedge_genes$Pathway,
+                                            levels = unname(focused_pathway_labels))
+focused_leadingedge_genes <- focused_leadingedge_genes %>% arrange(Pathway)
+
+# ---- Attach DE stats (log2FC, padj) across all 6 contrasts per gene ----
+add_de_stats <- function(gene_df, res, contrast_label) {
+  tmp <- as.data.frame(res) %>%
+    rownames_to_column("Ensembl") %>%
+    select(Ensembl, log2FoldChange, padj)
+  colnames(tmp)[2:3] <- c(paste0("log2FC_", contrast_label), paste0("padj_", contrast_label))
+  left_join(gene_df, tmp, by = "Ensembl")
+}
+
+focused_leadingedge_stats <- focused_leadingedge_genes %>%
+  add_de_stats(res_disease_e,        "sh190_Disease") %>%
+  add_de_stats(res_treated_e,        "sh190_Treatment_vs_KO") %>%
+  add_de_stats(res_treated_vs_WT_e,  "sh190_Treatment_vs_WT") %>%
+  add_de_stats(res_disease_n,        "MOE_Disease") %>%
+  add_de_stats(res_treated_n,        "MOE_Treatment_vs_KO") %>%
+  add_de_stats(res_treated_vs_WT_n,  "MOE_Treatment_vs_WT")
+
+write.csv(focused_leadingedge_stats,
+          file.path(out_dir, paste0(Sys.Date(), "_focused_pathways_leadingedge_genes_DEstats.csv")),
+          row.names = FALSE)
+message("Saved leading-edge gene DE stats: ",
+        file.path(out_dir, paste0(Sys.Date(), "_focused_pathways_leadingedge_genes_DEstats.csv")))
+load ("workspace_backups/2026-08-21_geneset_pipeline_workspace.RData")
+
+
+
+downstream_genes_panel <- build_pathway_annotated_heatmap(
+  xlsx_path         = "260811_output/260827_downstream_genes.xlsx",
+  stabilized_counts = stabilized_counts,
+  coldata           = coldata,
+  condition_colors  = condition_colors,
+  out_dir           = out_dir,
+  heatmap_title     = "Downstream muscle regeneration & mTORC signaling genes",
+  out_filename      = "downstream_genes_heatmap"
+)
+barplots_downstream_genes <- plot_rescued_gene_barplots(
+  rescue_selected  = downstream_genes_panel$annotation,
+  dds              = dds,
+  coldata          = coldata,
+  condition_colors = condition_colors,
+  out_dir          = file.path(out_dir, "downstream_genes_barplots")
+)
